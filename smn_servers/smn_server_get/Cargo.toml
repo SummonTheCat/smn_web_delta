@@ -4,20 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# Minimal AWS config but with the Tokio runtime enabled
-aws-config = { version = "1", default-features = false, features = ["rustls", "rt-tokio"] }
-
-# Provides Credentials::new()
-aws-credential-types = "1.2.9"
-
-# S3 client: rustls + tokio runtime (sleep, retries, identity cache, stall protection)
-aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls", "rt-tokio"] }
-
-# Provides Region, BehaviorVersion, type definitions
-aws-types = { version = "1.3.10", default-features = false }
-
-# Axum server with just what is needed
+rust-s3 = { version = "0.37", features = ["tokio-rustls-tls"] }
 axum = { version = "0.8.7", default-features = false, features = ["tokio", "http1"] }
-
-# Minimal Tokio runtime
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

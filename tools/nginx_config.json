@@ -1,0 +1,16 @@
+{
+    "baseAddress": "julienliakos.com",
+    "sslCertificatePath": "/etc/letsencrypt/live/julienliakos.com/fullchain.pem",
+    "sslCertificateKeyPath": "/etc/letsencrypt/live/julienliakos.com/privkey.pem",
+    "nginxConfigPath": "/etc/nginx/sites-enabled/default",
+    "servers": [
+        {
+            "subDomain": "",
+            "port": 33030
+        },
+        {
+            "subDomain": "get",
+            "port": 33031
+        }
+    ]
+}

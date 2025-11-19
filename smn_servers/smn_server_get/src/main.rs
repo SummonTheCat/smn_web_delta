@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_state(AppState { bucket: *bucket });
 
     // Start server
-    let addr: SocketAddr = "127.0.0.1:3001".parse()?;
+    let addr: SocketAddr = "127.0.0.1:33031".parse()?;
     println!("Listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

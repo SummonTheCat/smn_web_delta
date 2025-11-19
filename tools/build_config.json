@@ -1,0 +1,21 @@
+{
+    "projects": [
+        {
+            "path": "./smn_servers/smn_server_charmline",
+            "copy": []
+        },
+        {
+            "path": "./smn_servers/smn_server_get",
+            "copy": []
+        },
+        {
+            "path": "./smn_servers/smn_server_mora",
+            "copy": []
+        },
+        {
+            "path": "./smn_servers/smn_server_site",
+            "copy": []
+        }
+    ],
+    "output_bin": "bin"
+}

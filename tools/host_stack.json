@@ -1,0 +1,20 @@
+{
+  "services": [
+    {
+      "name": "smn_server_charmline",
+      "path": "./bin/smn_server_charmline/smn_server_charmline.exe"
+    },
+    {
+      "name": "smn_server_get",
+      "path": "./bin/smn_server_get/smn_server_get.exe"
+    },
+    {
+      "name": "smn_server_mora",
+      "path": "./bin/smn_server_mora/smn_server_mora.exe"
+    },
+    {
+      "name": "smn_server_site",
+      "path": "./bin/smn_server_site/smn_server_site.exe"
+    }
+  ]
+}

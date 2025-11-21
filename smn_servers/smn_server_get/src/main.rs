@@ -2,7 +2,6 @@ mod storage;
 mod server;
 
 use axum::{Router, extract::State, response::{Html, IntoResponse}, routing::get};
-use s3::Bucket;
 use std::{error::Error, env, path::Path};
 
 use crate::storage::bucket::generate_bucket;
@@ -12,8 +11,6 @@ use crate::server::html::render_index;
 
 #[derive(Clone)]
 struct AppState {
-    bucket: Bucket,
-    project_info: ProjectInfoConfig,
     combined: CombinedProjectSet,
 }
 
@@ -37,8 +34,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let app = Router::new()
         .route("/", get(index))
         .with_state(AppState {
-            bucket,
-            project_info,
             combined,
         });
 

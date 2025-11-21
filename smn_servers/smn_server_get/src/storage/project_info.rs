@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::{fs, path::{Path, PathBuf}};
+use std::{fs, path::Path};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ProjectInfoConfig {

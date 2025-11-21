@@ -15,113 +15,261 @@ pub fn render_index(set: &CombinedProjectSet) -> String {
 <head>
 <meta charset="UTF-8">
 <title>Projects</title>
+"#,
+    );
+
+    html.push_str(&render_font());
+
+    html.push_str(&render_style());
+
+    let mut header_content = String::new();
+
+    header_content.push_str("</head><body><h1 class=\"title\">SmnGet</h1>");
+    header_content.push_str(
+        "<p class=\"subtitle\">Official file repository of downloads provided by SummonBox Studio</p>",
+    );
+
+    // Place header under a div for styling
+    html.push_str(&format!(
+        r#"<div class="header-container">{}</div>"#,
+        header_content
+    ));
+
+    let mut detail_content = String::new();
+
+    for (category, projects) in categories {
+        detail_content.push_str("<details class=\"category\">");
+        detail_content.push_str(&format!("<summary>{}</summary>", category));
+
+        let mut project_content = String::new();
+
+        for proj in projects {
+            project_content.push_str(&render_project(proj));
+        }
+
+        // Place projects under a div for styling
+        detail_content.push_str(&format!(
+            r#"<div class="projects-container">{}</div>"#,
+            project_content
+        ));
+
+        detail_content.push_str("</details>");
+    }
+
+    // Place details under a div for styling
+    html.push_str(&format!(
+        r#"<div class="details-container">{}</div>"#,
+        detail_content
+    ));
+
+    html.push_str("</body></html>");
+    html
+}
+
+fn render_font() -> String {
+    r#"
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap" rel="stylesheet">
+    "#.to_string()
+}
+
+fn render_style() -> String {
+    r#"
 <style>
-    body {
-        font-family: sans-serif;
-        margin: 40px;
-        background: #fafafa;
-    }
-    details {
-        margin-bottom: 12px;
-        padding: 8px 12px;
-        background: #fff;
-        border-radius: 6px;
-        border: 1px solid #ddd;
-    }
-    summary {
-        cursor: pointer;
-        font-size: 1.25em;
-        padding: 4px;
-    }
-    .project-entry {
-        margin-left: 15px;
-        padding: 10px 14px;
-        background: #f7f7f7;
-        border-left: 2px solid #ccc;
-        border-radius: 4px;
-        margin-bottom: 12px;
-    }
-    .project-desc {
-        color: #444;
-        margin: 6px 0 12px 0;
-    }
-    .group {
-        margin-left: 15px;
-        padding: 6px 10px;
-        background: #fafafa;
-        border-left: 2px solid #bbb;
-        border-radius: 4px;
-        margin-bottom: 10px;
-    }
-    .version-block {
-        margin-left: 20px;
-        padding: 6px;
-        border-left: 2px solid #aaa;
-    }
-    ul {
-        margin: 6px 0 12px 0;
-        padding-left: 20px;
-    }
-    .version-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid #ddd;
-    border-top: 1px solid #ddd;
+:root {
+    /* Text Colors */
+    --color-text-01: #ffffff;
+    --color-text-02: #e0e0e0;
+    --color-text-03: #b0b0b0;
+    --color-text-04: #808080;
+
+    /* Primary Colors */
+    --color-primary-01: #4e9cff;
+    --color-primary-02: #1f7bff;
+    --color-primary-03: #005de0;
+    --color-primary-04: #003a99;
+
+    /* Accent Colors */
+    --color-accent-01: #ffcf53;
+    --color-accent-02: #ffb720;
+    --color-accent-03: #e28d00;
+    --color-accent-04: #a46400;
+
+    /* Background Colors */
+    --color-background-01: #0b0c10;
+    --color-background-02: #16181e;
+    --color-background-03: #1e2128;
+    --color-background-04: #252931;
+
+    /* Typography */
+    --font-family-01: "Nunito" , Arial, sans-serif;
+    --font-family-02: "Google Sans Code", monospace, monospace;
+    --font-size-01: 16px;
+    --font-size-02: 20px;
+    --font-size-03: 25px;
+
+    /* Shared Layout Variables */
+    --radius-01: 5px;
+    --radius-02: 8px;
+
+    --space-01: 5px;
+    --space-02: 10px;
+    --space-03: 20px;
+
+    --border-01: 1px solid var(--color-background-04);
+    --border-02: 1px solid var(--color-background-03);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    background-color: var(--color-background-01);
+    color: var(--color-text-01);
+    font-family: var(--font-family-01);
+    font-size: var(--font-size-01);
+}
+
+summary {
+    cursor: pointer;
+    font-weight: bold;
+    padding: var(--space-02);
+    background: var(--color-background-03);
+    border-radius: var(--radius-01);
+    user-select: none;
+    transition: background 0.25s ease, transform 0.2s ease;
+}
+
+summary:hover {
+    background: var(--color-background-04);
+}
+
+summary:active {
+    transform: scale(0.98);
+}
+
+/* Smooth accordion animation */
+details[open] > summary {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+details.category,
+details.group {
+    overflow: hidden;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+details.group {
+    border: var(--border-01);
+    border-radius: var(--radius-01);
+}
+
+/* Project entries */
+.project-entry {
+    padding: var(--space-02);
+    margin-bottom: var(--space-02);
+    background: var(--color-background-02);
+    border: var(--border-01);
+    border-radius: var(--radius-01);
+    box-shadow: 0px 0px 4px rgba(0,0,0,0.25);
+    transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.15s ease;
+}
+
+.project-entry:hover {
+    box-shadow: 0px 4px 8px rgba(0,0,0,0.30);
+    border-color: var(--color-background-01);
+}
+
+.projects-container {
+    padding: var(--space-02);
+    border-radius: var(--radius-01);
+}
+
+.version-row {
+    padding: var(--space-01) 0;
+    border-bottom: var(--border-02);
+    display: grid;
+    grid-template-columns: 400px auto;
+    transition: background 0.25s ease;
+}
+
+.version-row:hover {
+    background: rgba(255,255,255,0.03);
 }
 
 .version-left {
     display: flex;
-    min-width: 30vw;
-    flex: 0 0 auto;
     align-items: center;
 }
 
-.version-right {
+.header-container {
     display: flex;
-    flex: 1;
     align-items: center;
+    justify-content: space-between;
+    padding: var(--space-02);
+    background: var(--color-background-04);
+    box-shadow: 0px 2px 6px rgba(0,0,0,0.3);
 }
 
-    .version-tag {
-        background: #eee;
-        padding: 4px 8px;
-        margin-right: 12px;
-        margin-left: 12px;
-        border-radius: 4px;
-        font-size: 0.9em;
-        color: #333;
-        border: 1px solid #ccc;
-    }
+.category {
+    margin: var(--space-02);
+    border: var(--border-01);
+    border-radius: var(--radius-01);
+    transition: border-color 0.15s ease;
+}
 
-    .changelog-list {
-        background: #eee;
-        padding: 10px;
-        padding-left: 20px;
-        border-radius: 4px;
-        border: 1px solid #ccc;
-    }
+.category:hover {
+    border-color: var(--color-background-03);
+}
+
+.title {
+    font-size: var(--font-size-03);
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+/* VERSION DOWNLOAD BUTTON */
+.version-link {
+    color: var(--color-primary-02);
+    text-decoration: none;
+    margin-left: var(--space-03);
+    background: var(--color-background-01);
+    padding: var(--space-01);
+    border: 1px solid var(--color-primary-02);
+    border-radius: var(--radius-01);
+    transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.version-link:hover {
+    border-color: var(--color-primary-01);
+    color: var(--color-primary-01);
+    transform: translateX(2px);
+}
+
+.version-link:active {
+    border-color: var(--color-primary-04);
+    color: var(--color-primary-04);
+    transform: translateX(0px);
+}
+
+.space-01 {
+    height: var(--space-01);
+    width: var(--space-01);
+}
+
+.space-02 {
+    height: var(--space-02);
+    width: var(--space-02);
+}
+    
+
 </style>
-</head>
-<body>
-<h1>Projects</h1>
-"#,
-    );
-
-    for (category, projects) in categories {
-        html.push_str("<details>");
-        html.push_str(&format!("<summary>{}</summary>", category));
-
-        for proj in projects {
-            html.push_str(&render_project(proj));
-        }
-
-        html.push_str("</details>");
-    }
-
-    html.push_str("</body></html>");
-    html
+"#
+    .to_string()
 }
 
 fn categorize_projects<'a>(
@@ -149,16 +297,19 @@ fn render_project(proj: &CombinedProject) -> String {
 
     out.push_str("<div class=\"project-entry\">");
     out.push_str(&format!("<h2>{}</h2>", proj.name));
+    out.push_str("<div class=\"space-01\"> </div>");
     out.push_str(&format!(
         "<div class=\"project-desc\">{}</div>",
         proj.description
     ));
+    out.push_str("<div class=\"space-02\"> </div>");
 
     let version_groups = group_files_by_version(&proj.files);
 
     for (vg, files) in version_groups {
         out.push_str("<details class=\"group\">");
         out.push_str(&format!("<summary>{}</summary>", vg));
+        out.push_str("<div class=\"space-01\"> </div>");
 
         for f in &files {
             let filename = f.relative.split('/').last().unwrap_or(&f.relative);
@@ -209,9 +360,11 @@ fn render_version_block(v: &CombinedVersion, f: &DiscoveredFile) -> String {
     out.push_str(r#"<div class="version-row">"#);
 
     // LEFT COLUMN → the FILE LINK ONLY
+    let link_visual_text = f.relative.split('/').last().unwrap_or(&f.relative);
+
     out.push_str(&format!(
-        r#"<div class="version-left"><a href="{0}">{1}</a></div>"#,
-        f.url, f.relative
+        r#"<div class="version-left"><a href="{0}" class="version-link">{1}</a></div>"#,
+        f.url, link_visual_text
     ));
 
     // RIGHT COLUMN → version tag + changelog (NO filename)

@@ -33,7 +33,7 @@
             ]
         },
         {
-            "name": "SmnServerGet",
+            "name": "SmnRun",
             "key": "smn-get/tools/smn-run/",
             "description": "A configurable UI tool for running programs and commands.",
             "version_latest" : "dev/smn_run_002.7z",

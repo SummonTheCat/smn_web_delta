@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::{fs, path::Path};
+use std::{fs, path::{Path, PathBuf}};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ProjectInfoConfig {
@@ -23,8 +23,27 @@ pub struct ProjectVersionLog {
 }
 
 impl ProjectInfoConfig {
-    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Self {
-        let raw = fs::read_to_string(path).expect("Failed to read projectInfo.json");
-        serde_json::from_str(&raw).expect("Failed to parse projectInfo.json")
+    /// Load from the primary path, falling back to an alternate path.
+    pub fn load_from_primary_or_alt<P: AsRef<Path>, Q: AsRef<Path>>(
+        primary: P,
+        alternate: Q,
+    ) -> Self {
+        // Try primary path
+        if let Ok(raw) = fs::read_to_string(&primary) {
+            return serde_json::from_str(&raw)
+                .expect("Failed to parse projectInfo.json from primary path");
+        }
+
+        // Try alternate path
+        if let Ok(raw) = fs::read_to_string(&alternate) {
+            return serde_json::from_str(&raw)
+                .expect("Failed to parse projectInfo.json from alternate path");
+        }
+
+        panic!(
+            "Unable to load projectInfo.json from either:\n  - {}\n  - {}",
+            primary.as_ref().display(),
+            alternate.as_ref().display()
+        );
     }
 }

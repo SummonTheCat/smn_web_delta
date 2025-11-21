@@ -6,7 +6,7 @@
         },
         {
             "path": "./smn_servers/smn_server_get",
-            "copy": ["./smn_servers/smn_server_get/config/projectInfo.json"]
+            "copy": ["./config/projectInfo.json"]
         },
         {
             "path": "./smn_servers/smn_server_mora",

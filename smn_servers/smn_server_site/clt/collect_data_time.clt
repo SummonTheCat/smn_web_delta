@@ -1,0 +1,278 @@
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_site\src\main.rs ---
+-------------------------------------------
+mod structs;
+mod server;
+mod plugins;
+
+use server::Server;
+use crate::plugins::{
+    plugin_hello_world::PluginHelloWorld,
+    plugin_static_files::PluginStaticFile
+};
+use crate::structs::plugin::Plugin;
+
+fn main() {
+    let plugins: Vec<Box<dyn Plugin>> = vec![
+        Box::new(PluginStaticFile),
+        Box::new(PluginHelloWorld),
+    ];
+
+    let server = Server::new("33030", plugins, "./static");
+
+    server.run();
+}
+
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_site\src\plugins\mod.rs ---
+-------------------------------------------
+pub mod plugin_hello_world;
+pub mod plugin_static_files;
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_site\src\plugins\plugin_hello_world.rs ---
+-------------------------------------------
+use crate::{structs::plugin::Plugin, structs::core::{Request, Response}};
+
+pub struct PluginHelloWorld;
+
+impl Plugin for PluginHelloWorld {
+    fn plugin_name(&self) -> &str {
+        "HelloWorld"
+    }
+
+    fn plugin_init(&self) {
+        println!("HelloWorld from a plugin.");
+    }
+
+    fn plugin_match(&self, req: &Request) -> bool {
+        req.method == "GET"
+    }
+
+    fn plugin_serve(&self, req: &Request) -> Response {
+        println!("HelloWorld plugin serving a request for the request:");
+        println!("{}", req.raw);
+        println!("{}", req.path);
+
+        Response {
+            body: String::from(
+                "HTTP/1.1 200 OK\r\n\
+Content-Type: text/html; charset=utf-8\r\n\
+\r\n\
+<!DOCTYPE html>\
+<html><body><h1>Hello World Plugin</h1></body></html>",
+            ),
+        }
+    }
+}
+
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_site\src\plugins\plugin_static_files.rs ---
+-------------------------------------------
+use crate::structs::core::{Request, Response};
+use crate::structs::file_cache::FileCache;
+use crate::structs::plugin::Plugin;
+
+pub struct PluginStaticFile;
+
+impl Plugin for PluginStaticFile {
+    fn plugin_name(&self) -> &str {
+        "StaticFile"
+    }
+
+    fn plugin_match(&self, req: &Request) -> bool {
+        let path = if req.path == "/" { "/index.html" } else { req.path.as_str() };
+        FileCache::get(path).is_some()
+    }
+
+    fn plugin_serve(&self, req: &Request) -> Response {
+        let path = if req.path == "/" { "/index.html" } else { req.path.as_str() };
+
+        let file = FileCache::get(path)
+            .unwrap_or("<h1>File not found</h1>");
+
+        Response {
+            body: format!(
+                "HTTP/1.1 200 OK\r\n\
+Content-Type: text/html; charset=utf-8\r\n\
+\r\n\
+{}",
+                file
+            ),
+        }
+    }
+}
+
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_site\src\server.rs ---
+-------------------------------------------
+use crate::structs::file_cache::FileCache;
+use crate::structs::core::Request;
+use crate::structs::plugin::Plugin;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+
+pub struct Server {
+    port: String,
+    plugins: Vec<Box<dyn Plugin>>,
+    file_root: String,
+}
+
+impl Server {
+    pub fn new(port: &str, plugins: Vec<Box<dyn Plugin>>, file_root: &str) -> Self {
+        Self {
+            port: port.to_string(),
+            plugins,
+            file_root: file_root.to_string(),
+        }
+    }
+
+    pub fn run(&self) {
+        println!("Initializing file cache...");
+        FileCache::init(&self.file_root);
+
+        let bind_addr = format!("127.0.0.1:{}", self.port);
+        let listener = TcpListener::bind(&bind_addr)
+            .unwrap_or_else(|_| panic!("Failed to bind to {}", bind_addr));
+
+        println!("Serving on http://{}", bind_addr);
+
+        for plugin in &self.plugins {
+            plugin.plugin_init();
+            println!("Loaded plugin: {}", plugin.plugin_name());
+        }
+
+        for incoming in listener.incoming() {
+            if let Ok(mut stream) = incoming {
+                self.handle_client(&mut stream);
+            }
+        }
+    }
+
+    fn handle_client(&self, stream: &mut TcpStream) {
+        let mut buffer = [0_u8; 1024];
+        let _ = stream.read(&mut buffer);
+
+        let raw = String::from_utf8_lossy(&buffer).to_string();
+        let req = Request::new(raw);
+
+        for plugin in &self.plugins {
+            if plugin.plugin_match(&req) {
+                let resp = plugin.plugin_serve(&req);
+                let _ = stream.write_all(resp.body.as_bytes());
+                return;
+            }
+        }
+
+        let _ = stream.write_all(b"HTTP/1.1 404 NOT FOUND\r\n\r\n");
+    }
+}
+
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_site\src\structs\core.rs ---
+-------------------------------------------
+pub struct Request {
+    pub raw: String,
+    pub path: String,
+    pub method: String,
+}
+
+impl Request {
+    pub fn new(raw: String) -> Self {
+        let lines: Vec<&str> = raw.lines().collect();
+
+        let request_line = lines.get(0).unwrap_or(&"");
+        let parts: Vec<&str> = request_line.split_whitespace().collect();
+        
+        let method = parts.get(0).unwrap_or(&"").to_string();
+        let path = parts.get(1).unwrap_or(&"").to_string();
+
+        Request {
+            raw,
+            path,
+            method,
+        }
+    }
+}
+
+pub struct Response {
+    pub body: String,
+}
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_site\src\structs\file_cache.rs ---
+-------------------------------------------
+use std::{
+    collections::HashMap,
+    fs,
+    sync::OnceLock,
+    path::Path,
+};
+
+static FILE_CACHE: OnceLock<FileCache> = OnceLock::new();
+
+#[derive(Debug)]
+pub struct FileCache {
+    files: HashMap<String, String>,
+}
+
+impl FileCache {
+    pub fn init(root: &str) {
+        let mut map = HashMap::new();
+        Self::load_dir(Path::new(root), &mut map, "");
+
+        FILE_CACHE.set(FileCache { files: map })
+            .expect("FileCache already initialized");
+    }
+
+    fn load_dir(base: &Path, map: &mut HashMap<String, String>, prefix: &str) {
+        if let Ok(entries) = fs::read_dir(base) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let name = entry.file_name().to_string_lossy().to_string();
+
+                let key = format!("{}/{}", prefix, name).replace("//", "/");
+
+                if path.is_dir() {
+                    Self::load_dir(&path, map, &key);
+                } else if path.is_file() {
+                    if let Ok(contents) = fs::read_to_string(&path) {
+                        map.insert(key, contents);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn get(path: &str) -> Option<&'static str> {
+        FILE_CACHE.get()?.files.get(path).map(|v| v.as_str())
+    }
+}
+
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_site\src\structs\mod.rs ---
+-------------------------------------------
+pub mod plugin;
+pub mod core;
+pub mod file_cache;
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_site\src\structs\plugin.rs ---
+-------------------------------------------
+use crate::structs::core::{Request, Response};
+
+
+
+pub trait Plugin {
+    fn plugin_name(&self) -> &str;
+    fn plugin_init(&self) {}
+    fn plugin_match(&self, req: &Request) -> bool;
+    fn plugin_serve(&self, req: &Request) -> Response;
+}
+
+

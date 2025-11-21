@@ -1,0 +1,489 @@
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_get\src\main.rs ---
+-------------------------------------------
+mod storage;
+mod server;
+
+use axum::{Router, extract::State, response::{Html, IntoResponse}, routing::get};
+use s3::Bucket;
+use std::error::Error;
+
+use crate::storage::bucket::generate_bucket;
+use crate::storage::project_info::ProjectInfoConfig;
+use crate::storage::combined::CombinedProjectSet;
+use crate::server::html::render_index;
+
+#[derive(Clone)]
+struct AppState {
+    bucket: Bucket,
+    project_info: ProjectInfoConfig,
+    combined: CombinedProjectSet,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let bucket = generate_bucket();
+    let project_info = ProjectInfoConfig::load_from_file("./config/projectInfo.json");
+
+    let combined = CombinedProjectSet::build(&bucket, &project_info).await;
+
+    let app = Router::new()
+        .route("/", get(index))
+        .with_state(AppState {
+            bucket,
+            project_info,
+            combined,
+        });
+
+    server::core::serve(app, "33031".to_string()).await?;
+    Ok(())
+}
+
+async fn index(State(state): State<AppState>) -> impl IntoResponse {
+    Html(render_index(&state.combined))
+}
+
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_get\src\server\core.rs ---
+-------------------------------------------
+use axum::Router;
+use std::{error::Error, net::SocketAddr};
+
+pub async fn serve(app: Router, port: String) -> Result<(), Box<dyn Error>> {
+    let addr: SocketAddr = format!("127.0.0.1:{}", port).parse()?;
+    println!("Listening on http://{}", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app.into_make_service()).await?;
+
+    Ok(())
+}
+
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_get\src\server\html.rs ---
+-------------------------------------------
+use crate::storage::combined::{
+    CombinedProject, CombinedProjectSet, CombinedVersion, DiscoveredFile,
+};
+use std::collections::BTreeMap;
+
+pub fn render_index(set: &CombinedProjectSet) -> String {
+    let categories = categorize_projects(set);
+
+    let mut html = String::new();
+
+    html.push_str(
+        r#"
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Projects</title>
+<style>
+    body {
+        font-family: sans-serif;
+        margin: 40px;
+        background: #fafafa;
+    }
+    details {
+        margin-bottom: 12px;
+        padding: 8px 12px;
+        background: #fff;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+    }
+    summary {
+        cursor: pointer;
+        font-size: 1.25em;
+        padding: 4px;
+    }
+    .project-entry {
+        margin-left: 15px;
+        padding: 10px 14px;
+        background: #f7f7f7;
+        border-left: 2px solid #ccc;
+        border-radius: 4px;
+        margin-bottom: 12px;
+    }
+    .project-desc {
+        color: #444;
+        margin: 6px 0 12px 0;
+    }
+    .group {
+        margin-left: 15px;
+        padding: 6px 10px;
+        background: #fafafa;
+        border-left: 2px solid #bbb;
+        border-radius: 4px;
+        margin-bottom: 10px;
+    }
+    .version-block {
+        margin-left: 20px;
+        padding: 6px;
+        border-left: 2px solid #aaa;
+    }
+    ul {
+        margin: 6px 0 12px 0;
+        padding-left: 20px;
+    }
+    .version-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #ddd;
+}
+
+.version-left {
+    min-width: 260px;
+    flex: 0 0 auto;
+}
+
+.version-right {
+    flex: 1;
+}
+</style>
+</head>
+<body>
+<h1>Projects</h1>
+"#,
+    );
+
+    for (category, projects) in categories {
+        html.push_str("<details>");
+        html.push_str(&format!("<summary>{}</summary>", category));
+
+        for proj in projects {
+            html.push_str(&render_project(proj));
+        }
+
+        html.push_str("</details>");
+    }
+
+    html.push_str("</body></html>");
+    html
+}
+
+fn categorize_projects<'a>(
+    set: &'a CombinedProjectSet,
+) -> BTreeMap<String, Vec<&'a CombinedProject>> {
+    let mut map: BTreeMap<String, Vec<&CombinedProject>> = BTreeMap::new();
+
+    for proj in &set.projects {
+        // key example: "smn-get/games/nullmarker/"
+        let parts: Vec<&str> = proj.key.split('/').collect();
+        let category = if parts.len() > 2 {
+            parts[1].to_string() + "/"
+        } else {
+            "misc/".to_string()
+        };
+
+        map.entry(category).or_default().push(proj);
+    }
+
+    map
+}
+
+fn render_project(proj: &CombinedProject) -> String {
+    let mut out = String::new();
+
+    out.push_str("<div class=\"project-entry\">");
+    out.push_str(&format!("<h2>{}</h2>", proj.name));
+    out.push_str(&format!("<div class=\"project-desc\">{}</div>", proj.description));
+
+    let version_groups = group_files_by_version(&proj.files);
+
+    for (vg, files) in version_groups {
+        out.push_str("<details class=\"group\">");
+        out.push_str(&format!("<summary>{}</summary>", vg));
+
+        for f in &files {
+            if let Some(log) = proj.version_changelog.iter().find(|v| v.version == f.relative) {
+                out.push_str(&render_version_block(log, f));
+            } else {
+                // fallback: still show file, no changelog
+                out.push_str(&render_version_block_no_log(f));
+            }
+        }
+
+        out.push_str("</details>");
+    }
+
+    out.push_str("</div>");
+    out
+}
+
+
+fn group_files_by_version(files: &[DiscoveredFile]) -> BTreeMap<String, Vec<DiscoveredFile>> {
+    let mut map = BTreeMap::<String, Vec<DiscoveredFile>>::new();
+
+    for f in files {
+        let parts: Vec<&str> = f.relative.split('/').collect();
+        let group = if parts.len() > 2 {
+            format!("{}/", parts[parts.len() - 2])
+        } else {
+            "misc/".to_string()
+        };
+
+        map.entry(group).or_default().push(f.clone());
+    }
+
+    // sort each group newest → oldest
+    for (_key, list) in map.iter_mut() {
+        list.sort_by(|a, b| b.relative.cmp(&a.relative));
+    }
+
+    map
+}
+
+
+fn render_version_block(v: &CombinedVersion, f: &DiscoveredFile) -> String {
+    let mut out = String::new();
+
+    out.push_str(r#"<div class="version-row">"#);
+
+    // Left column = link
+    out.push_str(&format!(
+        r#"<div class="version-left"><a href="{0}">{1}</a></div>"#,
+        f.url, f.relative
+    ));
+
+    // Right column = tag + changelog
+    out.push_str(r#"<div class="version-right">"#);
+    out.push_str(&format!("<b>{} ({})</b>", v.version_tag, v.version));
+
+    if !v.changes.is_empty() {
+        out.push_str("<ul>");
+        for c in &v.changes {
+            out.push_str(&format!("<li>{}</li>", c));
+        }
+        out.push_str("</ul>");
+    }
+
+    out.push_str("</div></div>");
+    out
+}
+
+
+fn render_version_block_no_log(f: &DiscoveredFile) -> String {
+    format!(
+        r#"<div class="version-row">
+            <div class="version-left"><a href="{0}">{1}</a></div>
+            <div class="version-right"><b>{1}</b></div>
+        </div>"#,
+        f.url,
+        f.relative
+    )
+}
+
+
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_get\src\server\mod.rs ---
+-------------------------------------------
+pub mod core;
+pub mod html;
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_get\src\storage\bucket.rs ---
+-------------------------------------------
+use s3::{Bucket, Region, creds::Credentials};
+
+pub fn generate_bucket() -> Bucket {
+    // Load DO Spaces credentials
+    let access_key =
+        std::env::var("DO_SPACES_KEY").expect("Environment variable DO_SPACES_KEY is missing");
+    let secret_key = std::env::var("DO_SPACES_SECRET")
+        .expect("Environment variable DO_SPACES_SECRET is missing");
+
+    // DO Spaces config
+    let bucket_name = "smn-site-storage";
+    let region_name = "sfo3";
+    let endpoint = "https://sfo3.digitaloceanspaces.com";
+
+    // Credentials
+    let creds = Credentials::new(Some(&access_key), Some(&secret_key), None, None, None)
+        .expect("Failed to create DO Spaces credentials");
+
+    // Construct Region
+    let region = Region::Custom {
+        region: region_name.to_string(),
+        endpoint: endpoint.to_string(),
+    };
+
+    // Initialize bucket client
+    let bucket = Bucket::new(bucket_name, region, creds)
+        .expect("Failed to initialize bucket")
+        .with_path_style();
+
+    *bucket
+}
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_get\src\storage\combined.rs ---
+-------------------------------------------
+use serde::Serialize;
+use s3::Bucket;
+
+use crate::storage::project_info::ProjectInfoConfig;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CombinedProjectSet {
+    pub projects: Vec<CombinedProject>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CombinedProject {
+    pub name: String,
+    pub key: String,
+    pub description: String,
+    pub version_latest: String,
+    pub version_changelog: Vec<CombinedVersion>,
+    pub files: Vec<DiscoveredFile>,
+    pub is_unsorted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CombinedVersion {
+    pub version: String,
+    pub version_tag: String,
+    pub changes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiscoveredFile {
+    pub key: String,
+    pub relative: String,
+    pub url: String,
+}
+
+impl CombinedProjectSet {
+    pub async fn build(bucket: &Bucket, info: &ProjectInfoConfig) -> Self {
+        // 1. Pull all keys from bucket
+        let prefix = "smn-get/";
+        let list = bucket.list(prefix.to_string(), None).await.unwrap();
+
+        let mut all_files: Vec<DiscoveredFile> = Vec::new();
+
+        for result in list {
+            for obj in result.contents {
+                let key = obj.key;
+
+                if key.ends_with('/') {
+                    continue;
+                }
+
+                let relative = key.strip_prefix(prefix).unwrap_or(&key).to_string();
+                let url = format!(
+                    "https://{}.sfo3.digitaloceanspaces.com/{}",
+                    bucket.name(),
+                    key
+                );
+
+                all_files.push(DiscoveredFile { key, relative, url });
+            }
+        }
+
+        // 2. Build map for known projects
+        let mut projects: Vec<CombinedProject> = info
+            .projects
+            .iter()
+            .map(|p| CombinedProject {
+                name: p.name.clone(),
+                key: p.key.clone(),
+                description: p.description.clone(),
+                version_latest: p.version_latest.clone(),
+                version_changelog: p
+                    .version_changelog
+                    .iter()
+                    .map(|v| CombinedVersion {
+                        version: v.version.clone(),
+                        version_tag: v.version_tag.clone(),
+                        changes: v.changes.clone(),
+                    })
+                    .collect(),
+                files: Vec::new(),
+                is_unsorted: false,
+            })
+            .collect();
+
+        // 3. Assign files to known projects
+        for file in &all_files {
+            let mut matched = false;
+
+            for proj in &mut projects {
+                if file.key.starts_with(&proj.key) {
+                    proj.files.push(file.clone());
+                    matched = true;
+                    break;
+                }
+            }
+
+            // 4. If file did not match any known project, it belongs to UNSORTED
+            if !matched {
+                // Create or append to existing "Unsorted"
+                if let Some(unsorted) = projects.iter_mut().find(|p| p.is_unsorted) {
+                    unsorted.files.push(file.clone());
+                } else {
+                    projects.push(CombinedProject {
+                        name: "Unsorted".to_string(),
+                        key: "unsorted/".to_string(),
+                        description: "Files not included in projectInfo.json".to_string(),
+                        version_latest: String::new(),
+                        version_changelog: Vec::new(),
+                        files: vec![file.clone()],
+                        is_unsorted: true,
+                    });
+                }
+            }
+        }
+
+        Self { projects }
+    }
+}
+
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_get\src\storage\mod.rs ---
+-------------------------------------------
+pub mod bucket;
+pub mod project_info;
+pub mod combined;
+
+-------------------------------------------
+--- \\?\E:\Summon\Projects\Web\smn_web_delta\smn_servers\smn_server_get\src\storage\project_info.rs ---
+-------------------------------------------
+use serde::Deserialize;
+use std::{fs, path::Path};
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ProjectInfoConfig {
+    pub projects: Vec<ProjectEntry>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ProjectEntry {
+    pub name: String,
+    pub key: String,
+    pub description: String,
+    pub version_latest: String,
+    pub version_changelog: Vec<ProjectVersionLog>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ProjectVersionLog {
+    pub version: String,
+    pub changes: Vec<String>,
+    pub version_tag: String,
+}
+
+impl ProjectInfoConfig {
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Self {
+        let raw = fs::read_to_string(path).expect("Failed to read projectInfo.json");
+        serde_json::from_str(&raw).expect("Failed to parse projectInfo.json")
+    }
+}
+
+

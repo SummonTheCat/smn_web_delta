@@ -1,0 +1,58 @@
+{
+    "projects": [
+        {
+            "name": "NullMarker",
+            "key": "smn-get/games/nullmarker/",
+            "description": "NullMarker Game Files",
+            "version_latest" : "dev/nullmarkerdev_034.7z",
+            "version_changelog" : [
+                {
+                    "version": "dev/nullmarkerdev_034.7z",
+                    "changes": [
+                        "Initial release of NullMarker game files."
+                    ],
+                    "version_tag": "v0.3.4"
+                }
+            ]
+        },
+        {
+            "name": "SmnCollect",
+            "key": "smn-get/tools/smn-collect/",
+            "description": "A system tool for windows to collect text/source files into one headered file.",
+            "version_latest" : "dev/smn_collect_001.7z",
+            "version_changelog" : [
+                {
+                    "version": "dev/smn_collect_001.7z",
+                    "changes": [
+                        "Fixed bugs and improved performance.",
+                        "Added new features for better file management.",
+                        "Updated user interface for enhanced usability."
+                    ],
+                    "version_tag": "v0.0.1"
+                }
+            ]
+        },
+        {
+            "name": "SmnServerGet",
+            "key": "smn-get/tools/smn-run/",
+            "description": "A configurable UI tool for running programs and commands.",
+            "version_latest" : "dev/smn_run_002.7z",
+            "version_changelog" : [
+                {
+                    "version": "dev/smn_run_001.7z",
+                    "changes": [
+                        "Initial release of SmnServerGet tool."
+                    ],
+                    "version_tag": "v0.0.1"
+                },
+                {
+                    "version": "dev/smn_run_002.7z",
+                    "changes": [
+                        "Improved server stability and added new features."
+                    ],
+                    "version_tag": "v0.0.2"
+                }
+            ]
+        }
+    ]
+}
